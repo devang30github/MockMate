@@ -1,0 +1,36 @@
+/* src/components/Feedback.css */
+
+.feedback-container {
+  background-color: #fff;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  max-width: 800px;
+  margin: 2rem auto;
+}
+
+.feedback-container h2 {
+  font-size: 2rem;
+  color: #333;
+  margin-bottom: 1rem;
+}
+
+.feedback-content h3 {
+  font-size: 1.5rem;
+  color: #005f76;
+  margin-top: 1.5rem;
+}
+
+.feedback-content p {
+  font-size: 1rem;
+  color: #555;
+  line-height: 1.5;
+}
+
+.feedback-content {
+  margin-top: 1rem;
+}
+
+.feedback-content h3 + p {
+  margin-top: 0.5rem;
+}

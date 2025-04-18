@@ -26,12 +26,12 @@ import wave
 import tempfile
 from datetime import datetime
 
-
 from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfgen import canvas
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 from reportlab.lib.units import inch
+
 # ----------------- ENV SETUP -----------------
 load_dotenv()
 CHROMA_DB_DIR = "chroma_db"
@@ -99,7 +99,7 @@ def get_resume_context(state):
 def generate_questions(state):
     context = state["resume_context"]
     question_prompt = f"""
-You're an AI interview coach. Based on the following resume, generate 2 per category mock interview questions in the form of a Python dictionary with three categories: 
+You're an AI interview coach. Based on the following resume, generate 1 per category mock interview questions in the form of a Python dictionary with three categories: 
 - Technical
 - Behavioral
 - Role-specific
@@ -286,7 +286,27 @@ def run_interview(llm, questions):
     store_evaluation_in_chroma(results)
     return results
 
-# ----------------------PDF REPORT ----------------------------#
+# ----------------- LANGGRAPH -----------------
+from typing import TypedDict
+
+class ResumeState(TypedDict):
+    resume_context: str
+    mock_questions: str
+    interview_flow: list[str]
+
+def create_langgraph_workflow():
+    graph = StateGraph(state_schema=ResumeState)
+
+    graph.add_node("GetResumeContext", RunnableLambda(get_resume_context))
+    graph.add_node("GenerateQuestions", RunnableLambda(generate_questions))
+    graph.add_node("CreateInterviewFlow", RunnableLambda(create_interview_flow))
+
+    graph.set_entry_point("GetResumeContext")
+    graph.add_edge("GetResumeContext", "GenerateQuestions")
+    graph.add_edge("GenerateQuestions", "CreateInterviewFlow")
+    graph.set_finish_point("CreateInterviewFlow")
+
+    return graph.compile()
 
 def export_pdf_report(results, final_feedback, filename="mock_interview_report.pdf"):
     doc = SimpleDocTemplate(filename, pagesize=LETTER)
@@ -317,28 +337,6 @@ def export_pdf_report(results, final_feedback, filename="mock_interview_report.p
     doc.build(story)
     print(f"📄 PDF report saved as: {filename}")
 
-# ----------------- LANGGRAPH -----------------
-from typing import TypedDict
-
-class ResumeState(TypedDict):
-    resume_context: str
-    mock_questions: str
-    interview_flow: list[str]
-
-def create_langgraph_workflow():
-    graph = StateGraph(state_schema=ResumeState)
-
-    graph.add_node("GetResumeContext", RunnableLambda(get_resume_context))
-    graph.add_node("GenerateQuestions", RunnableLambda(generate_questions))
-    graph.add_node("CreateInterviewFlow", RunnableLambda(create_interview_flow))
-
-    graph.set_entry_point("GetResumeContext")
-    graph.add_edge("GetResumeContext", "GenerateQuestions")
-    graph.add_edge("GenerateQuestions", "CreateInterviewFlow")
-    graph.set_finish_point("CreateInterviewFlow")
-
-    return graph.compile()
-
 # ----------------- MAIN FLOW -----------------
 def process_resume(file_path):
     clear_chroma_db()
@@ -358,7 +356,6 @@ def process_resume(file_path):
     print(f"🏁 Final Feedback:\n{final_feedback}")
 
     export_pdf_report(interview_results, final_feedback)
-
 
 # ----------------- ENTRY POINT -----------------
 if __name__ == "__main__":

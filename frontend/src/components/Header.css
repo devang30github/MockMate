@@ -1,0 +1,45 @@
+/* src/components/Header.css */
+
+.header {
+  background-color: #004a7c;
+  color: white;
+  padding: 20px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-left: 2rem;
+  padding-right: 2rem;
+}
+
+.logo h1 {
+  font-size: 2.5rem;
+  margin: 0;
+}
+
+.logo p {
+  font-size: 1rem;
+  font-style: italic;
+  margin-top: 5px;
+}
+
+.nav-links ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+}
+
+.nav-links ul li {
+  margin: 0 15px;
+}
+
+.nav-links ul li a {
+  text-decoration: none;
+  color: white;
+  font-size: 1rem;
+  transition: color 0.3s ease;
+}
+
+.nav-links ul li a:hover {
+  color: #ffbd59;
+}

@@ -26,12 +26,12 @@ import wave
 import tempfile
 from datetime import datetime
 
-
 from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfgen import canvas
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 from reportlab.lib.units import inch
+
 # ----------------- ENV SETUP -----------------
 load_dotenv()
 CHROMA_DB_DIR = "chroma_db"
@@ -99,7 +99,7 @@ def get_resume_context(state):
 def generate_questions(state):
     context = state["resume_context"]
     question_prompt = f"""
-You're an AI interview coach. Based on the following resume, generate 2 per category mock interview questions in the form of a Python dictionary with three categories: 
+You're an AI interview coach. Based on the following resume, generate 1 per category mock interview questions in the form of a Python dictionary with three categories: 
 - Technical
 - Behavioral
 - Role-specific
@@ -286,8 +286,28 @@ def run_interview(llm, questions):
     store_evaluation_in_chroma(results)
     return results
 
-# ----------------------PDF REPORT ----------------------------#
+# ----------------- LANGGRAPH -----------------
+from typing import TypedDict
 
+class ResumeState(TypedDict):
+    resume_context: str
+    mock_questions: str
+    interview_flow: list[str]
+
+def create_langgraph_workflow():
+    graph = StateGraph(state_schema=ResumeState)
+
+    graph.add_node("GetResumeContext", RunnableLambda(get_resume_context))
+    graph.add_node("GenerateQuestions", RunnableLambda(generate_questions))
+    graph.add_node("CreateInterviewFlow", RunnableLambda(create_interview_flow))
+
+    graph.set_entry_point("GetResumeContext")
+    graph.add_edge("GetResumeContext", "GenerateQuestions")
+    graph.add_edge("GenerateQuestions", "CreateInterviewFlow")
+    graph.set_finish_point("CreateInterviewFlow")
+
+    return graph.compile()
+'''
 def export_pdf_report(results, final_feedback, filename="mock_interview_report.pdf"):
     doc = SimpleDocTemplate(filename, pagesize=LETTER)
     styles = getSampleStyleSheet()
@@ -316,29 +336,46 @@ def export_pdf_report(results, final_feedback, filename="mock_interview_report.p
 
     doc.build(story)
     print(f"📄 PDF report saved as: {filename}")
+'''
+def export_pdf_report(results, final_feedback, filename="mock_interview_report.pdf"):
+    def safe_parse_eval(eval_str):
+        eval_str = eval_str.strip()
+        # Remove markdown code fencing if present
+        if eval_str.startswith("```"):
+            eval_str = re.sub(r"```(?:\w+)?", "", eval_str).strip()
+        try:
+            return ast.literal_eval(eval_str)
+        except Exception as e:
+            print(f"⚠️ Failed to parse evaluation string: {e}")
+            return {"score": 0, "feedback": "Invalid format", "category": "unknown"}
 
-# ----------------- LANGGRAPH -----------------
-from typing import TypedDict
+    doc = SimpleDocTemplate(filename, pagesize=LETTER)
+    styles = getSampleStyleSheet()
+    story = []
 
-class ResumeState(TypedDict):
-    resume_context: str
-    mock_questions: str
-    interview_flow: list[str]
+    story.append(Paragraph("📝 <b>Mock Interview Report</b>", styles['Title']))
+    story.append(Spacer(1, 0.3 * inch))
 
-def create_langgraph_workflow():
-    graph = StateGraph(state_schema=ResumeState)
+    parsed_evals = [safe_parse_eval(r['evaluation']) for r in results]
+    avg_score = sum([e['score'] for e in parsed_evals]) / len(parsed_evals)
+    story.append(Paragraph(f"<b>Average Score:</b> {avg_score:.2f}/10", styles['Heading2']))
+    story.append(Spacer(1, 0.2 * inch))
 
-    graph.add_node("GetResumeContext", RunnableLambda(get_resume_context))
-    graph.add_node("GenerateQuestions", RunnableLambda(generate_questions))
-    graph.add_node("CreateInterviewFlow", RunnableLambda(create_interview_flow))
+    for i, (r, eval_data) in enumerate(zip(results, parsed_evals), 1):
+        story.append(Paragraph(f"<b>Q{i}:</b> {r['question']}", styles['Heading3']))
+        story.append(Paragraph(f"<b>Answer:</b> {r['answer']}", styles['Normal']))
+        story.append(Paragraph(f"<b>Score:</b> {eval_data['score']}", styles['Normal']))
+        story.append(Paragraph(f"<b>Feedback:</b> {eval_data['feedback']}", styles['Normal']))
+        story.append(Spacer(1, 0.2 * inch))
 
-    graph.set_entry_point("GetResumeContext")
-    graph.add_edge("GetResumeContext", "GenerateQuestions")
-    graph.add_edge("GenerateQuestions", "CreateInterviewFlow")
-    graph.set_finish_point("CreateInterviewFlow")
+    story.append(Spacer(1, 0.4 * inch))
+    story.append(Paragraph("<b>🏁 Final Feedback Summary:</b>", styles['Heading2']))
+    for line in final_feedback.strip().split("\n"):
+        story.append(Paragraph(line.strip(), styles['Normal']))
+        story.append(Spacer(1, 0.1 * inch))
 
-    return graph.compile()
-
+    doc.build(story)
+    print(f"📄 PDF report saved as: {filename}")
 # ----------------- MAIN FLOW -----------------
 def process_resume(file_path):
     clear_chroma_db()
@@ -358,7 +395,6 @@ def process_resume(file_path):
     print(f"🏁 Final Feedback:\n{final_feedback}")
 
     export_pdf_report(interview_results, final_feedback)
-
 
 # ----------------- ENTRY POINT -----------------
 if __name__ == "__main__":
