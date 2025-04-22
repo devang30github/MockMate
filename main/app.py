@@ -23,7 +23,8 @@ from mock_interview_agent import (
 )
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app, resources={r"/*": {"origins": "*"}})
+
 
 # Configuration
 UPLOAD_FOLDER = 'uploads'
@@ -66,22 +67,22 @@ def process_resume():
         return jsonify({'error': 'File not found'}), 404
     
     try:
-        # Clear any existing DB
         clear_chroma_db()
-        
-        # Extract and store resume text
+
         text = extract_text_from_resume(filepath)
         store_resume_in_chroma(text)
-        
-        # Generate interview questions
+
         workflow = create_langgraph_workflow()
         result = workflow.invoke({})
-        
-        # Return the generated questions
-        return jsonify({'result': {
-            'questions': result["interview_flow"]
-        }}), 200
-    
+
+        print("🧪 Workflow result:", result)
+
+        questions = result.get("interview_flow")
+        if not questions or not isinstance(questions, list):
+            return jsonify({'error': 'Failed to generate valid interview questions'}), 500
+
+        return jsonify({'result': {'questions': questions}}), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -337,3 +338,4 @@ if __name__ == '__main__':
     cleanup_thread.start()
     
     app.run(debug=True, host='0.0.0.0', port=5000)
+

@@ -80,6 +80,11 @@ document.addEventListener("DOMContentLoaded", function () {
       const uploadRes = await fetch(`${API_BASE_URL}/upload`, {
         method: "POST", body: formData,
       });
+      // ✅ Add this check
+      if (!uploadRes.ok) {
+        const errorText = await uploadRes.text(); // fallback to text to catch HTML
+        throw new Error(`Upload failed: ${errorText}`);
+      }
       const { filepath } = await uploadRes.json();
 
       const processRes = await fetch(`${API_BASE_URL}/process`, {
