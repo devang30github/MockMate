@@ -1,0 +1,22 @@
+langchain 
+langgraph 
+whisper 
+pyttsx3 
+pyaudio 
+python-dotenv
+langchain_community
+openai
+langchain_openai
+sentence-transformers 
+unstructured
+pdfminer
+pymupdf
+pinecone
+openai-whisper
+#install ffmpeg and add path is system environment variable
+#https://youtu.be/GYdhqmy_Nt8?si=6Rmr8Po4vWqNTFYg
+reportlab
+ffmpeg
+flask
+flask-cors
+werkzeug

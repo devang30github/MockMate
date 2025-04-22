@@ -1,0 +1,8 @@
+myenv
+design.md
+main/.env
+main/chroma_db
+main/eval_db
+main/uploads
+main/reports
+main/__pycache__
