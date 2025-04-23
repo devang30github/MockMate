@@ -20,3 +20,7 @@ ffmpeg
 flask
 flask-cors
 werkzeug
+
+fastapi 
+uvicorn 
+python-multipart

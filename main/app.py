@@ -7,6 +7,7 @@ import uuid
 import tempfile
 import threading
 import time
+import io
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
@@ -75,7 +76,7 @@ def process_resume():
         workflow = create_langgraph_workflow()
         result = workflow.invoke({})
 
-        print("🧪 Workflow result:", result)
+        #print("🧪 Workflow result:", result)
 
         questions = result.get("interview_flow")
         if not questions or not isinstance(questions, list):
@@ -111,6 +112,7 @@ def start_interview():
         }
     }), 200
 
+
 @app.route('/speak_question/<session_id>', methods=['GET'])
 def speak_question(session_id):
     if session_id not in interview_sessions:
@@ -119,64 +121,31 @@ def speak_question(session_id):
     session = interview_sessions[session_id]
     current_idx = session.get('current_index', 0)
 
-    # Just in case the index is too high
     if current_idx >= len(session['questions']):
         return jsonify({'error': 'No more questions'}), 400
 
     question_text = session['questions'][current_idx]
 
-    # Use a unique temp filename to avoid audio caching
-    temp_audio = tempfile.NamedTemporaryFile(suffix=f'_{current_idx}.wav', delete=False)
-    temp_audio.close()
-
     import pyttsx3
     engine = pyttsx3.init()
     engine.setProperty('rate', 150)
     engine.setProperty('volume', 1.0)
+
+    temp_audio = io.BytesIO()
+    temp_audio.name = f"question_{current_idx}.wav"
+
     engine.save_to_file(question_text, temp_audio.name)
     engine.runAndWait()
 
-    return send_file(temp_audio.name, mimetype='audio/wav')
+    # Read the file into memory and return it
+    with open(temp_audio.name, 'rb') as f:
+        audio_bytes = io.BytesIO(f.read())
 
-@app.route('/interview/submit_answer/<session_id>', methods=['POST'])
-def submit_answer(session_id):
-    if session_id not in interview_sessions:
-        return jsonify({'error': 'Session not found'}), 404
-    
-    data = request.json
-    answer = data.get('answer', '')
-    
-    if not answer:
-        return jsonify({'error': 'No answer provided'}), 400
-    
-    session = interview_sessions[session_id]
-    current_idx = session['current_index']
-    question = session['questions'][current_idx]
-    
-    # Evaluate the answer
-    try:
-        evaluation_result = evaluate_answer(question, answer)
-        
-        # Store the response
-        session['answers'].append(answer)
-        session['evaluations'].append(evaluation_result)
-        
-        # Check if this is the last question
-        is_completed = current_idx >= len(session['questions']) - 1
-        
-        # Update the current index for next time
-        #session['current_index'] = min(current_idx + 1, len(session['questions']) - 1)
-        session['current_index'] = current_idx + 1
-        
-        return jsonify({
-            'evaluation': {
-                'evaluation': evaluation_result,
-                'is_completed': is_completed
-            }
-        }), 200
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    os.remove(temp_audio.name)  # clean up temp disk file
+
+    audio_bytes.seek(0)
+    return send_file(audio_bytes, mimetype='audio/wav')
+
 
 @app.route('/interview/audio_answer/<session_id>', methods=['POST'])
 def submit_audio_answer(session_id):
@@ -318,19 +287,28 @@ def download_file(filename):
 
 
 # Clean up expired sessions periodically
+
 def cleanup_sessions():
     while True:
-        time.sleep(3600)  # Run every hour
+        time.sleep(3600)
         current_time = time.time()
         expired_sessions = []
-        
-        for session_id, session in interview_sessions.items():
-            if 'last_access' in session and current_time - session['last_access'] > 86400:  # 24 hours
+
+        # Cleanup expired sessions
+        for session_id, session in list(interview_sessions.items()):
+            if 'last_access' in session and current_time - session['last_access'] > 86400:
                 expired_sessions.append(session_id)
-        
         for session_id in expired_sessions:
             del interview_sessions[session_id]
 
+        # Cleanup old files
+        for folder in [UPLOAD_FOLDER, REPORTS_FOLDER]:
+            for filename in os.listdir(folder):
+                file_path = os.path.join(folder, filename)
+                if os.path.isfile(file_path):
+                    file_age = current_time - os.path.getmtime(file_path)
+                    if file_age > 86400:  # 24 hours
+                        os.remove(file_path)
 
 if __name__ == '__main__':
     # Start cleanup thread
