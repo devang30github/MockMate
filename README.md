@@ -1,19 +1,117 @@
-MockMate – AI-Powered Voice-Based Mock Interview Platform
+# 🎤 MockMate-AI Mock Interview Assistant
 
-Developed an AI-powered mock interview platform that conducts end-to-end voice-based interviews using LangChain, Whisper, and OpenRouter LLMs.
+An AI-powered voice-based interview simulation platform that evaluates user responses and generates a detailed PDF report — built with Flask, LangChain, Whisper, and ChromaDB.
 
-Implemented a multi-agent architecture:
+---
 
-Agent 1: Asks personalized questions (TTS) based on parsed resume data and ChromaDB vector search.
+## 🚀 Features
 
-Agent 2: Listens to spoken answers, transcribes them using Whisper, and evaluates responses with real-time scoring and feedback.
+- Upload your resume (PDF)
+- Auto-generated mock interview questions (technical, behavioral, and role-specific)
+- Voice-based Q&A with real-time transcription using OpenAI Whisper
+- AI evaluation of answers with scores, feedback, and categories
+- Interactive frontend with progress tracking
+- Final PDF report with scores, feedback, and summary
 
-Agent 3: Analyzes evaluation history from vector DB and generates comprehensive final feedback.
+---
 
-Integrated PDF report export summarizing candidate performance, question-wise feedback, and improvement tips using reportlab.
+## 📁 Project Structure
 
-Enabled resume parsing, semantic question generation, vector storage, and interactive voice-based UX using pyaudio, pyttsx3, and keyboard.
+```
+.
+├── app.py                        # Flask backend with API endpoints
+├── mock_interview_agent.py      # Core logic: resume parsing, interview generation, evaluation
+├── main.js                      # Frontend interaction logic (audio recording, session control)
+├── index.html                   # UI template (Bootstrap based)
+├── requirements.txt             # Python dependencies
+├── templates/
+│   └── index.html               # HTML entry point for Flask
+├── static/
+│   └── main.js                  # Frontend JavaScript
+├── uploads/                     # Uploaded resumes
+├── reports/                     # Generated PDF reports
+├── chroma_db/                   # Resume vector DB (auto-generated)
+└── eval_db/                     # Evaluation vector DB (auto-generated)
+```
 
-Designed for aspiring professionals to simulate realistic interviews and receive actionable, AI-driven guidance.
+---
 
-Tech Stack: Python, LangChain, Whisper, PyMuPDF, ChromaDB, ReportLab, OpenRouter, HuggingFace, TTS/STT, PyAudio
+## 🛠️ Installation
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-username/mock-interview-assistant.git
+cd mock-interview-assistant
+```
+
+### 2. Create Virtual Environment & Install Dependencies
+
+```bash
+python -m venv venv
+source venv/bin/activate   # On Windows use venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### 3. Setup Environment Variables
+
+Create a `.env` file:
+
+```
+OPENROUTER_API_KEY=your_openrouter_key
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+HF_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+```
+
+### 4. Install FFmpeg
+
+Download and install FFmpeg, then add it to your system PATH.
+
+📽️ [Install guide](https://youtu.be/GYdhqmy_Nt8?si=6Rmr8Po4vWqNTFYg)
+
+---
+
+## ▶️ Running the App
+
+```bash
+python app.py
+```
+
+Visit [http://localhost:5000](http://localhost:5000) in your browser.
+
+---
+
+## 🧠 Powered By
+
+- 🧩 **LangChain + LangGraph** — dynamic agent workflows
+- 🗂️ **ChromaDB** — vector storage for resumes and evaluations
+- 🧠 **Whisper** — real-time audio transcription
+- 📄 **ReportLab** — export structured PDF reports
+- 🎙️ **Pyttsx3 & Pyaudio** — voice input/output
+
+---
+
+## 📌 Future Improvements
+
+- Role selection before question generation
+- Scoring visualization (e.g., radar/spider charts)
+- Support for multilingual interviews
+- Option to switch to FastAPI backend
+
+---
+
+## 📃 License
+
+MIT License — free to use and modify!
+
+---
+
+## ✨ Demo Screenshot
+
+![screenshot](https://user-images.githubusercontent.com/demo-screenshot.png) <!-- Replace with actual image if available -->
+
+---
+
+## 🙌 Contribute
+
+Pull requests welcome! Please open an issue first if you want to add a feature or fix a bug.
