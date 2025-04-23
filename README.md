@@ -21,13 +21,12 @@ An AI-powered voice-based interview simulation platform that evaluates user resp
 .
 ├── app.py                        # Flask backend with API endpoints
 ├── mock_interview_agent.py      # Core logic: resume parsing, interview generation, evaluation
-├── main.js                      # Frontend interaction logic (audio recording, session control)
-├── index.html                   # UI template (Bootstrap based)
 ├── requirements.txt             # Python dependencies
 ├── templates/
 │   └── index.html               # HTML entry point for Flask
 ├── static/
 │   └── main.js                  # Frontend JavaScript
+|   └── styles.css               # Styles for the frontend
 ├── uploads/                     # Uploaded resumes
 ├── reports/                     # Generated PDF reports
 ├── chroma_db/                   # Resume vector DB (auto-generated)
@@ -41,8 +40,8 @@ An AI-powered voice-based interview simulation platform that evaluates user resp
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/mock-interview-assistant.git
-cd mock-interview-assistant
+git clone https://github.com/devang30github/MockMate.git
+cd MockMate
 ```
 
 ### 2. Create Virtual Environment & Install Dependencies
@@ -91,24 +90,9 @@ Visit [http://localhost:5000](http://localhost:5000) in your browser.
 
 ---
 
-## 📌 Future Improvements
-
-- Role selection before question generation
-- Scoring visualization (e.g., radar/spider charts)
-- Support for multilingual interviews
-- Option to switch to FastAPI backend
-
----
-
 ## 📃 License
 
 MIT License — free to use and modify!
-
----
-
-## ✨ Demo Screenshot
-
-![screenshot](https://user-images.githubusercontent.com/demo-screenshot.png) <!-- Replace with actual image if available -->
 
 ---
 
