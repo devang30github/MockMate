@@ -307,36 +307,7 @@ def create_langgraph_workflow():
     graph.set_finish_point("CreateInterviewFlow")
 
     return graph.compile()
-'''
-def export_pdf_report(results, final_feedback, filename="mock_interview_report.pdf"):
-    doc = SimpleDocTemplate(filename, pagesize=LETTER)
-    styles = getSampleStyleSheet()
-    story = []
 
-    story.append(Paragraph("📝 <b>Mock Interview Report</b>", styles['Title']))
-    story.append(Spacer(1, 0.3 * inch))
-
-    avg_score = sum([ast.literal_eval(r['evaluation'])['score'] for r in results]) / len(results)
-    story.append(Paragraph(f"<b>Average Score:</b> {avg_score:.2f}/10", styles['Heading2']))
-    story.append(Spacer(1, 0.2 * inch))
-
-    for i, r in enumerate(results, 1):
-        story.append(Paragraph(f"<b>Q{i}:</b> {r['question']}", styles['Heading3']))
-        story.append(Paragraph(f"<b>Answer:</b> {r['answer']}", styles['Normal']))
-        evaluation = ast.literal_eval(r['evaluation'])
-        story.append(Paragraph(f"<b>Score:</b> {evaluation['score']}", styles['Normal']))
-        story.append(Paragraph(f"<b>Feedback:</b> {evaluation['feedback']}", styles['Normal']))
-        story.append(Spacer(1, 0.2 * inch))
-
-    story.append(Spacer(1, 0.4 * inch))
-    story.append(Paragraph("<b>🏁 Final Feedback Summary:</b>", styles['Heading2']))
-    for line in final_feedback.split("\n"):
-        story.append(Paragraph(line.strip(), styles['Normal']))
-        story.append(Spacer(1, 0.1 * inch))
-
-    doc.build(story)
-    print(f"📄 PDF report saved as: {filename}")
-'''
 def export_pdf_report(results, final_feedback, filename="mock_interview_report.pdf"):
     def safe_parse_eval(eval_str):
         eval_str = eval_str.strip()
