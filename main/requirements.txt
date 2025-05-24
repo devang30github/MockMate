@@ -24,3 +24,10 @@ werkzeug
 fastapi 
 uvicorn 
 python-multipart
+
+fastapi 
+uvicorn 
+python-multipart 
+websockets 
+soundfile 
+pydub

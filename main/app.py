@@ -1,98 +1,101 @@
 # app.py
 
-from flask import Flask, request, jsonify, send_file, render_template
+from flask import Flask, request, jsonify, send_file,render_template
 from flask_cors import CORS
 import os
+import uuid
 import tempfile
 import threading
 import time
-import uuid
-from datetime import datetime
-from werkzeug.utils import secure_filename
 import io
+from werkzeug.utils import secure_filename
+from datetime import datetime
 
-# Import from your updated agent script
+# Import from your existing script
 from mock_interview_agent import (
-    clear_chroma_db,
     extract_text_from_resume,
     store_resume_in_chroma,
     create_langgraph_workflow,
-    QuestionSpeakerAgent,
-    AnswerEvaluatorAgent,
-    FinalFeedbackAgent,
+    evaluate_answer,
+    agent3_generate_final_feedback,
+    export_pdf_report,
     store_evaluation_in_chroma,
-    export_pdf_report
+    clear_chroma_db
 )
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
+
+# Configuration
 UPLOAD_FOLDER = 'uploads'
 REPORTS_FOLDER = 'reports'
-
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(REPORTS_FOLDER, exist_ok=True)
 
+# Store active interview sessions
 interview_sessions = {}
-
 @app.route("/")
 def index():
     return render_template("index.html")
-
-# -------- Upload Resume --------
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
+    
     file = request.files['file']
-    if file.filename == '' or not file.filename.endswith('.pdf'):
-        return jsonify({'error': 'Invalid file format'}), 400
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    if file and file.filename.endswith('.pdf'):
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        saved_filename = f"{timestamp}_{filename}"
+        filepath = os.path.join(UPLOAD_FOLDER, saved_filename)
+        file.save(filepath)
+        return jsonify({'filepath': filepath}), 200
+    
+    return jsonify({'error': 'Invalid file format'}), 400
 
-    filename = secure_filename(file.filename)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    saved_filename = f"{timestamp}_{filename}"
-    filepath = os.path.join(UPLOAD_FOLDER, saved_filename)
-    file.save(filepath)
-
-    return jsonify({'filepath': filepath}), 200
-
-# -------- Process Resume and Generate Questions --------
 
 @app.route('/process', methods=['POST'])
 def process_resume():
     data = request.json
     filepath = data.get('filepath')
-
+    
     if not filepath or not os.path.exists(filepath):
         return jsonify({'error': 'File not found'}), 404
-
+    
     try:
         clear_chroma_db()
+
         text = extract_text_from_resume(filepath)
         store_resume_in_chroma(text)
+
         workflow = create_langgraph_workflow()
         result = workflow.invoke({})
-        questions = result.get("interview_flow")
 
-        if not questions:
-            return jsonify({'error': 'Failed to generate questions'}), 500
+        #print("🧪 Workflow result:", result)
+
+        questions = result.get("interview_flow")
+        if not questions or not isinstance(questions, list):
+            return jsonify({'error': 'Failed to generate valid interview questions'}), 500
 
         return jsonify({'result': {'questions': questions}}), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# -------- Start Interview Session --------
-
 @app.route('/interview/start', methods=['POST'])
 def start_interview():
     data = request.json
     questions = data.get('questions', [])
-
+    
     if not questions:
         return jsonify({'error': 'No questions provided'}), 400
-
+    
+    # Create a new interview session
     session_id = str(uuid.uuid4())
     interview_sessions[session_id] = {
         'questions': questions,
@@ -100,14 +103,15 @@ def start_interview():
         'answers': [],
         'evaluations': []
     }
-
+    
     return jsonify({
         'session_id': session_id,
         'total_questions': len(questions),
-        'current_question': {'text': questions[0]}
+        'current_question': {
+            'text': questions[0]
+        }
     }), 200
 
-# -------- Speak Question --------
 
 @app.route('/speak_question/<session_id>', methods=['GET'])
 def speak_question(session_id):
@@ -115,94 +119,121 @@ def speak_question(session_id):
         return jsonify({'error': 'Session not found'}), 404
 
     session = interview_sessions[session_id]
-    current_idx = session['current_index']
+    current_idx = session.get('current_index', 0)
 
     if current_idx >= len(session['questions']):
         return jsonify({'error': 'No more questions'}), 400
 
     question_text = session['questions'][current_idx]
 
-    speaker = QuestionSpeakerAgent()
-    speaker.speak_question(question_text)
+    import pyttsx3
+    engine = pyttsx3.init()
+    engine.setProperty('rate', 150)
+    engine.setProperty('volume', 1.0)
 
-    return jsonify({'message': 'Question spoken successfully'}), 200
+    temp_audio = io.BytesIO()
+    temp_audio.name = f"question_{current_idx}.wav"
 
-# -------- Submit Audio Answer --------
+    engine.save_to_file(question_text, temp_audio.name)
+    engine.runAndWait()
+
+    # Read the file into memory and return it
+    with open(temp_audio.name, 'rb') as f:
+        audio_bytes = io.BytesIO(f.read())
+
+    os.remove(temp_audio.name)  # clean up temp disk file
+
+    audio_bytes.seek(0)
+    return send_file(audio_bytes, mimetype='audio/wav')
+
 
 @app.route('/interview/audio_answer/<session_id>', methods=['POST'])
 def submit_audio_answer(session_id):
     if session_id not in interview_sessions:
         return jsonify({'error': 'Session not found'}), 404
-
+    
     if 'audio' not in request.files:
         return jsonify({'error': 'No audio file provided'}), 400
-
+    
     audio_file = request.files['audio']
+    
     if audio_file.filename == '':
         return jsonify({'error': 'No audio file selected'}), 400
-
+    
+    # Save audio to temp file
     temp_audio = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
     audio_file.save(temp_audio.name)
     temp_audio.close()
-
+    
     try:
+        # Import here to avoid loading the model until necessary
         import whisper
+        
+        # Transcribe audio
         model = whisper.load_model("base")
         result = model.transcribe(temp_audio.name)
         transcription = result["text"]
-
+        
+        # Process the transcribed answer
         session = interview_sessions[session_id]
         current_idx = session['current_index']
         question = session['questions'][current_idx]
-
-        evaluator = AnswerEvaluatorAgent()
-        evaluation_result = evaluator.evaluate_answer(question, transcription)
-
+        
+        # Evaluate the answer
+        evaluation_result = evaluate_answer(question, transcription)
+        
+        # Store the response
         session['answers'].append(transcription)
         session['evaluations'].append(evaluation_result)
-
+        
+        # Check if this is the last question
         is_completed = current_idx >= len(session['questions']) - 1
-        session['current_index'] += 1
-
+        
+        # Update the current index for next time
+        session['current_index'] = current_idx + 1
+        
+        # Clean up temp file
         os.unlink(temp_audio.name)
-
+        
         return jsonify({
             'transcription': transcription,
-            'evaluation': {'evaluation': evaluation_result, 'is_completed': is_completed}
+            'evaluation': {
+                'evaluation': evaluation_result,
+                'is_completed': is_completed
+            }
         }), 200
-
+    
     except Exception as e:
+        # Clean up temp file
         if os.path.exists(temp_audio.name):
             os.unlink(temp_audio.name)
         return jsonify({'error': str(e)}), 500
-
-# -------- Get Next Question --------
 
 @app.route('/interview/next_question/<session_id>', methods=['GET'])
 def get_next_question(session_id):
     if session_id not in interview_sessions:
         return jsonify({'error': 'Session not found'}), 404
-
+    
     session = interview_sessions[session_id]
     current_idx = session['current_index']
-
+    
     if current_idx >= len(session['questions']):
         return jsonify({'error': 'No more questions'}), 400
-
-    return jsonify({'question': session['questions'][current_idx]}), 200
-
-# -------- Check Interview Status --------
+    
+    return jsonify({
+        'question': session['questions'][current_idx]
+    }), 200
 
 @app.route('/interview/status/<session_id>', methods=['GET'])
 def get_interview_status(session_id):
     if session_id not in interview_sessions:
         return jsonify({'error': 'Session not found'}), 404
-
+    
     session = interview_sessions[session_id]
     total = len(session['questions'])
     current = session['current_index']
     remaining = total - current
-
+    
     return jsonify({
         'status': 'completed' if remaining == 0 else 'in_progress',
         'total_questions': total,
@@ -210,19 +241,19 @@ def get_interview_status(session_id):
         'remaining_questions': remaining
     }), 200
 
-# -------- Finalize Interview --------
 
 @app.route('/interview/finalize/<session_id>', methods=['POST'])
 def finalize_interview(session_id):
     if session_id not in interview_sessions:
         return jsonify({'error': 'Session not found'}), 404
-
+    
     session = interview_sessions[session_id]
-
+    
+    # Prepare data for storage
     evaluation_data = []
     for i, (q, a, e) in enumerate(zip(
-        session['questions'][:len(session['answers'])],
-        session['answers'],
+        session['questions'][:len(session['answers'])], 
+        session['answers'], 
         session['evaluations']
     )):
         evaluation_data.append({
@@ -230,51 +261,58 @@ def finalize_interview(session_id):
             'answer': a,
             'evaluation': e
         })
-
+    
+    # Store evaluations in vector db
     store_evaluation_in_chroma(evaluation_data)
-
-    agent3 = FinalFeedbackAgent()
-    final_feedback = agent3.generate_summary()
-
+    
+    # Generate final feedback
+    final_feedback = agent3_generate_final_feedback()
+    
+    # Generate PDF report
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     report_filename = f"interview_report_{timestamp}.pdf"
     report_path = os.path.join(REPORTS_FOLDER, report_filename)
-
+    
     export_pdf_report(evaluation_data, final_feedback, filename=report_path)
-
+    
+    # Return feedback and link to report
     return jsonify({
         'final_feedback': final_feedback,
         'report_url': f"/report/{report_filename}"
     }), 200
 
-# -------- Download Report --------
-
 @app.route('/report/<filename>', methods=['GET'])
-def download_report(filename):
+def download_file(filename):
     return send_file(os.path.join(REPORTS_FOLDER, filename), as_attachment=True)
 
-# -------- Session Cleanup --------
+
+# Clean up expired sessions periodically
 
 def cleanup_sessions():
     while True:
         time.sleep(3600)
         current_time = time.time()
-
         expired_sessions = []
+
+        # Cleanup expired sessions
         for session_id, session in list(interview_sessions.items()):
             if 'last_access' in session and current_time - session['last_access'] > 86400:
                 expired_sessions.append(session_id)
-
         for session_id in expired_sessions:
             del interview_sessions[session_id]
 
+        # Cleanup old files
         for folder in [UPLOAD_FOLDER, REPORTS_FOLDER]:
             for filename in os.listdir(folder):
                 file_path = os.path.join(folder, filename)
-                if os.path.isfile(file_path) and (time.time() - os.path.getmtime(file_path)) > 86400:
-                    os.remove(file_path)
+                if os.path.isfile(file_path):
+                    file_age = current_time - os.path.getmtime(file_path)
+                    if file_age > 86400:  # 24 hours
+                        os.remove(file_path)
 
 if __name__ == '__main__':
+    # Start cleanup thread
     cleanup_thread = threading.Thread(target=cleanup_sessions, daemon=True)
     cleanup_thread.start()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    
+    app.run(debug=True, host='localhost', port=5000)
